@@ -1,0 +1,358 @@
+---
+title: "An observational analysis of the effect of improved sanitation on linear growth in the WASH Benefits Bangladesh and Kenya trials"
+author: ""
+date: "13 Nov 2017 (updated 27 Mar 2018)"
+output: 
+  html_notebook:
+    theme: default
+    highlight: haddock
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Overview
+This script conducts an observational analysis of the relationship between improved sanitation at enrollment and LAZ at the final endpoint in the WASH Benefits trials. This is a prospective cohort study nested within the control arm of each trial, whereby our exposure is household sanitation conditions at enrollment and our outcome is length-for-age z score (LAZ) at the final endpoint, when children were about 2 years old (median age in Kenya = 22 months, median age in Bangladesh = 25 months).  
+
+In the Bangladesh trial, we defined an improved latrine as a latrine with a functional water seal. In the Kenya trial, we followed the standard WHO JMP definition for access to an improved latrine.  These definitions reflect locally appropriate definitions of improved sanitation, as used in reporting the original trials.
+
+We restricted the analyses to the control arms of each trial to avoid any complexity due to effects of intervention (in the case of nutritional arms) or changes in sanitation conditions as a result of the trial (in the case of sanitation arms).
+
+The section Summary of Results includes the results across both countries, so if you want to skip the details and cut to the chase then click on that section in the TOC (at left) to go to the end.
+
+To download the R markdown source code for this notbook, toggle the dropdown menu at the top right of this page to "Download Rmd".
+
+## Preamble
+```{r preamble, eval=TRUE,echo=TRUE,results='hide'}
+# Preamble - load packages and save colors for plotting
+
+library(washb) # development package available at devtools::install_github("ben-arnold/washb")
+library(SuperLearner)
+library(tmle)
+library(sandwich)
+library(lmtest)
+library(zoo)
+
+library(gam)
+library(splines)
+library(glmnet)
+library(arm)
+library(foreach)
+
+library(tidyverse)
+
+
+# bright color blind palette:  https://personal.sron.nl/~pault/ 
+cblack <- "#000004FF"
+cblue <- "#3366AA"
+cteal <- "#11AA99"
+cgreen <- "#66AA55"
+cchartr <- "#CCCC55"
+cmagent <- "#992288"
+cred <- "#EE3333"
+corange <- "#EEA722"
+cyellow <- "#FFEE33"
+cgrey <- "#777777"
+
+```
+
+
+# Bangladesh analysis
+
+## Load and process the Bangladesh data
+
+Note: these datasets are publicly available through the Open Science Framework:
+https://osf.io/pqzj5
+
+```{r load bangladesh data, results='hide',eval=TRUE}
+# load and merge the final analysis files
+# treatment assignments, enrollment charactersitics, and anthropometry measurements
+d_tr    <- read.csv("~/washb-obs-san/data/washb-bangladesh-tr-public.csv")
+d_enrol <- read.csv('~/washb-obs-san/data/washb-bangladesh-enrol-public.csv')
+d_anth  <- read.csv('~/washb-obs-san/data/washb-bangladesh-anthro-public.csv')
+
+#  merge to final analysis files, loaded above
+lazd <- left_join(d_enrol,d_tr,by=c("clusterid","block"))
+lazd <- left_join(lazd,d_anth,by=c("dataid","clusterid","block"))
+
+# filter to children with measurements at year 2 with valid LAZ measuresments
+# filter to the control arm
+d2 <- lazd %>%
+  filter(svy==2 & laz_x==0 & tr %in% c("Control"))
+
+# simplify the dataset by selecting covariates and exposures
+# these are the pre-specified covariates from the trial
+Ws <- c("month","aged","sex","birthord","momage","momedu","momheight","Nlt18","Ncomp","watmin","hfiacat","elec","floor","walls","roof","asset_wardrobe","asset_table","asset_chair","asset_khat","asset_chouki","asset_tv","asset_refrig","asset_bike","asset_moto","asset_sewmach","asset_mobile")
+
+d <- d2 %>%
+  select(block,laz,latown,latseal,Ws) %>%
+  mutate(latrine=factor(ifelse(latown==0 | is.na(latown),"No latrine","Latrine")),
+         implatrine=factor(ifelse(latown==1 & latseal==1,"Improved latrine","No improved latrine")))
+
+d$implatrine[is.na(d$implatrine)] <- "No improved latrine"
+
+d$latcat <- factor(NA,levels=c("No latrine","Latrine no water seal","Latrine with water seal"))
+d$latcat[d$latrine=="No latrine"] <- "No latrine"
+d$latcat[d$latrine=="Latrine" & d$implatrine=="No improved latrine"] <- "Latrine no water seal"
+d$latcat[d$latrine=="Latrine" & d$implatrine=="Improved latrine"] <- "Latrine with water seal"
+
+
+```
+
+## Distribution of LAZ at the two year measurement by access to improved latrines
+
+This is a summary of children in the control arm at the final endpoint, stratified by latrine access at enrollment:
+```{r bangladesh table, echo=FALSE}
+# table of latrine type, with mean LAZ and SDs
+b_lattable <- as.data.frame(table(d$latcat))
+
+# mean and SD
+b_musd <- d %>%
+  group_by(latcat) %>%
+  select(latcat, laz) %>%
+  summarize(n=n(),
+            pct=sprintf("%1.0f",100*(n/sum(b_lattable$Freq))),
+            mean=mean(laz),
+            sd=sd(laz))
+
+
+
+colnames(b_musd) <- c("Sanitation at enrollment","N children","(%)","Mean LAZ","SD LAZ")
+knitr::kable(b_musd,digits=c(0,0,0,3,3),format="markdown")
+```
+
+This is a summary of the LAZ distributions by the different groups:
+```{r bangladesh density, echo=FALSE}
+
+# plot distributions of LAZ stratified by latrine ownership at enrollment
+p1 <- ggplot(data=filter(d,latcat!="Latrine with water seal"), aes(x=laz,group=latcat,fill=latcat)) +
+  geom_density(alpha=0.4) +
+  scale_fill_manual(values=c(corange,cmagent),
+                    guide=guide_legend(title="Sanitation at enrollment")) +
+  theme_minimal()
+p1
+
+p2 <- ggplot(data=filter(d,latcat!="Latrine no water seal"), aes(x=laz,group=latcat,fill=latcat)) +
+  geom_density(alpha=0.4) +
+  scale_fill_manual(values=c(corange,cteal),
+                    guide=guide_legend(title="Sanitation at enrollment")) +
+  theme_minimal()
+p2
+
+
+```
+
+## Association between access to an improved latrine and LAZ
+
+```{r ests}
+# unadjusted
+b_glmest_unadj <- washb_glm(Y=d$laz,tr=d$latcat,id=d$block,
+                            contrast=c("No latrine","Latrine with water seal"))
+
+# adjusted
+b_glmest_adj <- washb_glm(Y=d$laz,tr=d$latcat,W=d[Ws],id=d$block,
+                          contrast=c("No latrine","Latrine with water seal"))
+
+```
+
+## Double-robust, targeted maximum likelihood estimation (TMLE)
+
+This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO).
+
+```{r tmleest}
+set.seed(12345)
+b_tmleest_adj <- washb_tmle(Y=d$laz,tr=d$latcat,W=d[Ws],
+                          id=d$block,
+                          contrast=c("No latrine","Latrine with water seal"),
+                          Q.SL.library=c("SL.mean","SL.glm","SL.bayesglm","SL.gam","SL.glmnet"))
+
+
+```
+
+
+
+# Kenya analysis
+
+## Load and process the Kenya data
+
+Note: these datasets are publicly available through the Open Science Framework:
+https://osf.io/uept9/
+```{r load kenya data, results='hide',eval=TRUE}
+
+# load and merge the final analysis files
+# In Kenya, the anthropometry data from visit 2 already has
+# covariates merged to it (including treatment information)
+# However, one of the pre-specified covariates was not
+# improved latrine ownership at enrollment, so add that from
+# the data used to create Table 1 from the manuscript
+dk_enrol <- read.csv("~/washb-obs-san/data/table1.csv")
+dk_anth  <- read.csv("~/washb-obs-san/data/endline-anthro.csv")
+
+# restrict enrollment measures to improved latrine and merge
+# to the anthropometry measures at the year 2 visit
+dk_enrol <- dk_enrol %>%
+  select(clusterid,compoundid,hhid,implat)
+dk <- left_join(dk_anth,dk_enrol,by=c("clusterid","compoundid","hhid"))
+
+# filter to just index children in the control arms
+dk <- dk %>%
+  filter(targetchild==1 & tr %in% c("Control","Passive Control"))
+
+# there were 150/2272 children (6%) for whom improved latrine status 
+# was missing.  Exclude them (missing at random assumption)
+# there were 21 with unrealistic LAZ measurements. Exclude them
+dk <- dk %>% 
+  filter(!is.na(implat) & !is.na(haz))
+
+# select pre-specified covariates from the primary outcomes
+# excluding staffid since it is sparse without extensive recoding
+# ensure factors are coded correctly
+# this follows the primary outcome adjusted analysis (line ~74):
+# https://github.com/jadebc-berkeley/WBK-primary-outcomes/blob/master/primary/analysis/0-base-programs.R
+kWs <- c("month","HHS","aged","sex","mother_age","motherht","mother_edu",
+    "u18","Ncomp","water_time","floor","roof","cow",
+    "goat","chicken","dog","elec","radio","tv","mobilephone",
+    "clock","bicycle","motorcycle","stove")
+
+kd <- dk %>%
+  select(block,clusterid,tr,laz=haz,implat,kWs)
+
+# reorder factor values to so that the reference is 
+# not having something instead of the first thing alphabetically
+kd$month <-  as.factor(kd$month)
+kd$clock <- relevel(kd$clock,ref="No clock")
+kd$elec <- relevel(kd$elec,ref="No electricity")
+kd$mother_edu=relevel(kd$mother_edu,ref="Incomplete primary")
+kd$roof <- relevel(kd$roof,ref="Thatch/leaf")
+kd$floor <- relevel(kd$floor,ref="Earth/dung")
+kd$bicycle <- relevel(kd$bicycle,ref="No bicycle")
+kd$radio <- relevel(kd$radio,ref="No radio")
+kd$tv <- relevel(kd$tv,ref="No TV")
+kd$mobilephone <- relevel(kd$mobilephone,ref="No mobile phone")
+kd$stove <- relevel(kd$stove,ref="No stove")
+
+# formally code improved latrine
+kd$latcat <- factor(ifelse(kd$implat==1,"Improved latrine","No improved latrine"),levels=c("No improved latrine","Improved latrine"))
+
+```
+
+
+## Distribution of LAZ at the two year measurement by access to improved latrines
+
+This is a summary of children in the active and passive control arms at the final endpoint, stratified by latrine access at enrollment:
+```{r kenya table, echo=FALSE}
+# table of latrine type, with mean LAZ and SDs
+k_lattable <- as.data.frame(table(kd$latcat))
+
+# mean and SD
+k_musd <- kd %>%
+  group_by(latcat) %>%
+  select(latcat, laz) %>%
+  summarize(n=n(),
+            pct=sprintf("%1.0f",100*(n/sum(k_lattable$Freq))),
+            mean=mean(laz),
+            sd=sd(laz))
+
+colnames(k_musd) <- c("Sanitation at enrollment","N children","(%)","Mean LAZ","SD LAZ")
+knitr::kable(k_musd,digits=c(0,0,0,3,3),format="markdown")
+```
+
+This is a summary of the LAZ distributions by the different groups:
+```{r kenya density, echo=FALSE}
+# plot distributions of LAZ stratified by baseline latrine ownership
+ggplot(data=kd,aes(x=laz,group=latcat,fill=latcat)) +
+  geom_density(alpha=0.4) +
+  scale_fill_manual(values=c(corange,cteal),
+                    guide=guide_legend(title="Sanitation at enrollment")) +
+  theme_minimal()
+
+```
+
+## Association between access to an improved latrine and LAZ
+
+```{r kenya ests}
+# unadjusted
+k_glmest_unadj <- washb_glm(Y=kd$laz,tr=kd$latcat,id=kd$block,
+                            contrast=c("No improved latrine","Improved latrine"))
+
+# adjusted
+k_glmest_adj <- washb_glm(Y=kd$laz,tr=kd$latcat,W=kd[kWs],id=kd$block,
+                          contrast=c("No improved latrine","Improved latrine"))
+
+```
+
+## Double-robust, targeted maximum likelihood estimation (TMLE)
+
+This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO).
+
+```{r kenya tmleest}
+set.seed(12345)
+k_tmleest_adj <- washb_tmle(Y=kd$laz,tr=kd$latcat,W=kd[kWs],
+                          id=kd$block,
+                          contrast=c("No improved latrine","Improved latrine"),
+                          Q.SL.library=c("SL.mean","SL.glm","SL.bayesglm","SL.gam","SL.glmnet"))
+
+
+```
+
+
+
+
+# Summary of results
+
+```{r summary of results, eval=TRUE, include=FALSE}
+
+# Bangladesh results
+bests <- rbind(b_glmest_unadj$TR[c(1,2,3,6)],
+               b_glmest_adj$TR[c(1,2,3,6)],
+               unlist(b_tmleest_adj$estimates$ATE[c("psi","CI","pvalue")])
+               )
+
+kests <- rbind(k_glmest_unadj$TR[c(1,2,3,6)],
+               k_glmest_adj$TR[c(1,2,3,6)],
+               unlist(k_tmleest_adj$estimates$ATE[c("psi","CI","pvalue")])
+               )
+rownames(bests) <- rownames(kests) <- c("Unadjusted","Adjusted, GLM","Adjusted, double-robust TMLE")
+
+colnames(bests) <- colnames(kests) <- c("Diff LAZ", "Lower 95%","Upper 95%", "P-value")
+                                        
+```
+
+In both trials, access to improved sanitation at enrollment was associated with improved LAZ at the final endpoint. In unadjusted analyses, the effects were +```r sprintf("%1.2f",bests[1,1])```Z (Bangladesh) and +```r sprintf("%1.2f",kests[1,1])```Z (Kenya).  
+
+Effects were attenuated after adjusting for a broad set of potentially confounding covariates using ensemble machine learning and double-robust, targeted maximum likelihood estimation. In Bangladesh, the effect was reduced to +```r sprintf("%1.2f",bests[3,1])```Z (p=```r sprintf("%1.3f",bests[3,4])```).  In Kenya, the effect was reduced to +```r sprintf("%1.2f",kests[3,1])```Z (p=```r sprintf("%1.3f",kests[3,4])```).  
+
+Adjusted estimates using simple generalized linear models (GLM) were very similar to the more aggressivly adjusted TMLE estimates. The consistency in the point estimates between the two adjusted analyses suggests that the residual bias from unobserved confounding cannot be salvaged from more aggressive estimation approaches, even double-robust estimators that include flexible machine learning.
+
+There was definitively no effect of improved sanitation (or any combination of WASH interventions) on LAZ in either trial when evaluating the effect of the randomized interventions.
+
+Bangladesh trial results (see Fig 3B): https://www.ncbi.nlm.nih.gov/pubmed/29396217
+
+Kenya trial results (see Fig 3C): https://www.ncbi.nlm.nih.gov/pubmed/29396219
+
+The contrast between the trials' findings and these observational analysis results underscore the importance of randomized controlled trials for exposures and outcomes that are inextricably linked with broader improvements in overall wellbeing.
+
+## Bangladesh
+```{r summary table Bangladesh,echo=FALSE,include=TRUE}
+knitr::kable(bests,digits=3,caption="Summary of the association between access to an improved latrine at enrollment and LAZ among the birth cohort at the final endpoint, Bangladesh")
+```
+
+## Kenya
+```{r summary table Kenya,echo=FALSE,include=TRUE}
+knitr::kable(kests,digits=3,caption="Summary of the association between access to an improved latrine at enrollment and LAZ among the birth cohort at the final endpoint, Kenya")
+```
+
+# Session Info
+```{r session info}
+sessionInfo()
+```
+
+
+
