@@ -1,7 +1,7 @@
 ---
 title: "An observational analysis of the effect of improved sanitation on linear growth in the WASH Benefits Bangladesh and Kenya trials"
 author: ""
-date: "13 Nov 2017 (updated 27 Mar 2018)"
+date: "13 Nov 2017 (updated 28 Mar 2018)"
 output: 
   html_notebook:
     theme: default
@@ -27,13 +27,15 @@ We restricted the analyses to the control arms of each trial to avoid any comple
 
 The section Summary of Results includes the results across both countries, so if you want to skip the details and cut to the chase then click on that section in the TOC (at left) to go to the end.
 
-To download the R markdown source code for this notbook, toggle the dropdown menu at the top right of this page to "Download Rmd".
+To download the R markdown source code for this notebook, toggle the dropdown menu at the top right of this page to "Download Rmd".
 
 ## Preamble
 ```{r preamble, eval=TRUE,echo=TRUE,results='hide'}
 # Preamble - load packages and save colors for plotting
-
-library(washb) # development package available at devtools::install_github("ben-arnold/washb")
+# WASH Benefits trial analysis package
+# dev. version at devtools::install_github("ben-arnold/washb")
+library(washb) 
+# Machine learning and TMLE packages
 library(SuperLearner)
 library(tmle)
 library(sandwich)
@@ -45,9 +47,8 @@ library(splines)
 library(glmnet)
 library(arm)
 library(foreach)
-
+# dm and data visualization
 library(tidyverse)
-
 
 # bright color blind palette:  https://personal.sron.nl/~pault/ 
 cblack <- "#000004FF"
@@ -60,7 +61,6 @@ cred <- "#EE3333"
 corange <- "#EEA722"
 cyellow <- "#FFEE33"
 cgrey <- "#777777"
-
 ```
 
 
@@ -109,7 +109,7 @@ d$latcat[d$latrine=="Latrine" & d$implatrine=="Improved latrine"] <- "Latrine wi
 ## Distribution of LAZ at the two year measurement by access to improved latrines
 
 This is a summary of children in the control arm at the final endpoint, stratified by latrine access at enrollment:
-```{r bangladesh table, echo=FALSE}
+```{r bangladesh table}
 # table of latrine type, with mean LAZ and SDs
 b_lattable <- as.data.frame(table(d$latcat))
 
@@ -129,7 +129,7 @@ knitr::kable(b_musd,digits=c(0,0,0,3,3),format="markdown")
 ```
 
 This is a summary of the LAZ distributions by the different groups:
-```{r bangladesh density, echo=FALSE}
+```{r bangladesh density}
 
 # plot distributions of LAZ stratified by latrine ownership at enrollment
 p1 <- ggplot(data=filter(d,latcat!="Latrine with water seal"), aes(x=laz,group=latcat,fill=latcat)) +
@@ -151,6 +151,7 @@ p2
 
 ## Association between access to an improved latrine and LAZ
 
+Estimate the difference in LAZ between children born into households that have a latrine with a functional water seal versus those born into households without a latrine. The estimator is a genearlized linear model (GLM) with robust, sandwich standard errors clustered at the block level, which was the independent unit in the trial. Adjusted estimates screen pre-specified covariates using a likelihood ratio test. 
 ```{r ests}
 # unadjusted
 b_glmest_unadj <- washb_glm(Y=d$laz,tr=d$latcat,id=d$block,
@@ -164,7 +165,7 @@ b_glmest_adj <- washb_glm(Y=d$laz,tr=d$latcat,W=d[Ws],id=d$block,
 
 ## Double-robust, targeted maximum likelihood estimation (TMLE)
 
-This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO).
+This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO). Standard errors are based on the influence curve and treat blocks as the independent unit (as in the main trial).
 
 ```{r tmleest}
 set.seed(12345)
@@ -192,14 +193,16 @@ https://osf.io/uept9/
 # However, one of the pre-specified covariates was not
 # improved latrine ownership at enrollment, so add that from
 # the data used to create Table 1 from the manuscript
-dk_enrol <- read.csv("~/washb-obs-san/data/table1.csv")
-dk_anth  <- read.csv("~/washb-obs-san/data/endline-anthro.csv")
+dk_enrol <- read.csv("~/washb-obs-san/data/washb-kenya-uptake-baseline-public.csv")
+dk_tr    <- read.csv("~/washb-obs-san/data/washb-kenya-tr-public.csv")
+dk_anth  <- read.csv("~/washb-obs-san/data/washb-kenya-endline-anthro-public.csv")
 
 # restrict enrollment measures to improved latrine and merge
 # to the anthropometry measures at the year 2 visit
 dk_enrol <- dk_enrol %>%
-  select(clusterid,compoundid,hhid,implat)
-dk <- left_join(dk_anth,dk_enrol,by=c("clusterid","compoundid","hhid"))
+  select(clusterid,hhid,implat=imp_lat)
+dk <- left_join(dk_tr,dk_enrol,by=c("clusterid"))
+dk <- left_join(dk,dk_anth,by=c("block","clusterid","hhid"))
 
 # filter to just index children in the control arms
 dk <- dk %>%
@@ -216,7 +219,7 @@ dk <- dk %>%
 # ensure factors are coded correctly
 # this follows the primary outcome adjusted analysis (line ~74):
 # https://github.com/jadebc-berkeley/WBK-primary-outcomes/blob/master/primary/analysis/0-base-programs.R
-kWs <- c("month","HHS","aged","sex","mother_age","motherht","mother_edu",
+kWs <- c("month","HHS","agey","sex","mother_age","motherht","mother_edu",
     "u18","Ncomp","water_time","floor","roof","cow",
     "goat","chicken","dog","elec","radio","tv","mobilephone",
     "clock","bicycle","motorcycle","stove")
@@ -247,7 +250,7 @@ kd$latcat <- factor(ifelse(kd$implat==1,"Improved latrine","No improved latrine"
 ## Distribution of LAZ at the two year measurement by access to improved latrines
 
 This is a summary of children in the active and passive control arms at the final endpoint, stratified by latrine access at enrollment:
-```{r kenya table, echo=FALSE}
+```{r kenya table}
 # table of latrine type, with mean LAZ and SDs
 k_lattable <- as.data.frame(table(kd$latcat))
 
@@ -265,7 +268,7 @@ knitr::kable(k_musd,digits=c(0,0,0,3,3),format="markdown")
 ```
 
 This is a summary of the LAZ distributions by the different groups:
-```{r kenya density, echo=FALSE}
+```{r kenya density}
 # plot distributions of LAZ stratified by baseline latrine ownership
 ggplot(data=kd,aes(x=laz,group=latcat,fill=latcat)) +
   geom_density(alpha=0.4) +
@@ -276,6 +279,8 @@ ggplot(data=kd,aes(x=laz,group=latcat,fill=latcat)) +
 ```
 
 ## Association between access to an improved latrine and LAZ
+
+Estimate the difference in LAZ between children born into households that have a latrine with a functional water seal versus those born into households without a latrine. The estimator is a genearlized linear model (GLM) with robust, sandwich standard errors clustered at the block level, which was the independent unit in the trial. Adjusted estimates screen pre-specified covariates using a likelihood ratio test. 
 
 ```{r kenya ests}
 # unadjusted
@@ -290,7 +295,7 @@ k_glmest_adj <- washb_glm(Y=kd$laz,tr=kd$latcat,W=kd[kWs],id=kd$block,
 
 ## Double-robust, targeted maximum likelihood estimation (TMLE)
 
-This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO).
+This estimator follows the pre-specified, adjusted analysis methods from the main trial. In our view, this is the most aggressive statistical adjustment possible given the design of a fixed exposure and prospectivly measured outcome. Targeted maximum likelihood estimation is a double-robust approach that models both the outcome and the treatment mechanism (here: access to improved sanitation at enrollment). It allows for flexible estimation of each model using ensemble machine learning. We used the same ensemble and pre-specified covariates as was used in the trial's primary analysis (simple mean, GLM, Bayes GLM, GAM with cubic splines, LASSO).  Standard errors are based on the influence curve and treat blocks as the independent unit (as in the main trial).
 
 ```{r kenya tmleest}
 set.seed(12345)
