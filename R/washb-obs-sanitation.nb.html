@@ -309,25 +309,41 @@ div.tocify {
 <h2>Preamble</h2>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBQcmVhbWJsZSAtIGxvYWQgcGFja2FnZXMgYW5kIHNhdmUgY29sb3JzIGZvciBwbG90dGluZ1xuIyBXQVNIIEJlbmVmaXRzIHRyaWFsIGFuYWx5c2lzIHBhY2thZ2VcbiMgZGV2LiB2ZXJzaW9uIGF0IGRldnRvb2xzOjppbnN0YWxsX2dpdGh1YihcImJlbi1hcm5vbGQvd2FzaGJcIilcbmxpYnJhcnkod2FzaGIpIFxuIyBNYWNoaW5lIGxlYXJuaW5nIGFuZCBUTUxFIHBhY2thZ2VzXG5saWJyYXJ5KFN1cGVyTGVhcm5lcilcbmxpYnJhcnkodG1sZSlcbmxpYnJhcnkoc2FuZHdpY2gpXG5saWJyYXJ5KGxtdGVzdClcbmxpYnJhcnkoem9vKVxubGlicmFyeShnYW0pXG5saWJyYXJ5KHNwbGluZXMpXG5saWJyYXJ5KGdsbW5ldClcbmxpYnJhcnkoYXJtKVxubGlicmFyeShmb3JlYWNoKVxuIyBkbSBhbmQgZGF0YSB2aXN1YWxpemF0aW9uXG5saWJyYXJ5KHRpZHl2ZXJzZSlcbiMgYnJpZ2h0IGNvbG9yIGJsaW5kIHBhbGV0dGU6ICBodHRwczovL3BlcnNvbmFsLnNyb24ubmwvfnBhdWx0LyBcbmNibGFjayA8LSBcIiMwMDAwMDRGRlwiXG5jYmx1ZSA8LSBcIiMzMzY2QUFcIlxuY3RlYWwgPC0gXCIjMTFBQTk5XCJcbmNncmVlbiA8LSBcIiM2NkFBNTVcIlxuY2NoYXJ0ciA8LSBcIiNDQ0NDNTVcIlxuY21hZ2VudCA8LSBcIiM5OTIyODhcIlxuY3JlZCA8LSBcIiNFRTMzMzNcIlxuY29yYW5nZSA8LSBcIiNFRUE3MjJcIlxuY3llbGxvdyA8LSBcIiNGRkVFMzNcIlxuY2dyZXkgPC0gXCIjNzc3Nzc3XCJcbmBgYCJ9 -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBQcmVhbWJsZSAtIGxvYWQgcGFja2FnZXMgYW5kIHNhdmUgY29sb3JzIGZvciBwbG90dGluZ1xuIyBXQVNIIEJlbmVmaXRzIHRyaWFsIGFuYWx5c2lzIHBhY2thZ2VcbiMgZGV2LiB2ZXJzaW9uIGF0IGRldnRvb2xzOjppbnN0YWxsX2dpdGh1YihcImJlbi1hcm5vbGQvd2FzaGJcIilcbmxpYnJhcnkod2FzaGIpIFxuYGBgIn0= -->
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Preamble - load packages and save colors for plotting</span>
 <span class="co"># WASH Benefits trial analysis package</span>
 <span class="co"># dev. version at devtools::install_github(&quot;ben-arnold/washb&quot;)</span>
-<span class="kw">library</span>(washb) 
-<span class="co"># Machine learning and TMLE packages</span>
-<span class="kw">library</span>(SuperLearner)
-<span class="kw">library</span>(tmle)
-<span class="kw">library</span>(sandwich)
-<span class="kw">library</span>(lmtest)
-<span class="kw">library</span>(zoo)
-<span class="kw">library</span>(gam)
-<span class="kw">library</span>(splines)
-<span class="kw">library</span>(glmnet)
-<span class="kw">library</span>(arm)
-<span class="kw">library</span>(foreach)
+<span class="kw">library</span>(washb) </code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBNYWNoaW5lIGxlYXJuaW5nIGFuZCBUTUxFIHBhY2thZ2VzXG5saWJyYXJ5KFN1cGVyTGVhcm5lcilcbmBgYCJ9 -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Machine learning and TMLE packages</span>
+<span class="kw">library</span>(SuperLearner)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0bWxlKVxuYGBgIn0= -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(tmle)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShzYW5kd2ljaClcbmxpYnJhcnkobG10ZXN0KVxuYGBgIn0= -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(sandwich)
+<span class="kw">library</span>(lmtest)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh6b28pXG5saWJyYXJ5KGdhbSlcbmBgYCJ9 -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(zoo)
+<span class="kw">library</span>(gam)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShzcGxpbmVzKVxubGlicmFyeShnbG1uZXQpXG5gYGAifQ== -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(splines)
+<span class="kw">library</span>(glmnet)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShhcm0pXG5gYGAifQ== -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(arm)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShmb3JlYWNoKVxuIyBkbSBhbmQgZGF0YSB2aXN1YWxpemF0aW9uXG5saWJyYXJ5KHRpZHl2ZXJzZSlcbmBgYCJ9 -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(foreach)
 <span class="co"># dm and data visualization</span>
-<span class="kw">library</span>(tidyverse)
-<span class="co"># bright color blind palette:  https://personal.sron.nl/~pault/ </span>
+<span class="kw">library</span>(tidyverse)</code></pre></div>
+<!-- rnb-source-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBicmlnaHQgY29sb3IgYmxpbmQgcGFsZXR0ZTogIGh0dHBzOi8vcGVyc29uYWwuc3Jvbi5ubC9+cGF1bHQvIFxuY2JsYWNrIDwtIFwiIzAwMDAwNEZGXCJcbmNibHVlIDwtIFwiIzMzNjZBQVwiXG5jdGVhbCA8LSBcIiMxMUFBOTlcIlxuY2dyZWVuIDwtIFwiIzY2QUE1NVwiXG5jY2hhcnRyIDwtIFwiI0NDQ0M1NVwiXG5jbWFnZW50IDwtIFwiIzk5MjI4OFwiXG5jcmVkIDwtIFwiI0VFMzMzM1wiXG5jb3JhbmdlIDwtIFwiI0VFQTcyMlwiXG5jeWVsbG93IDwtIFwiI0ZGRUUzM1wiXG5jZ3JleSA8LSBcIiM3Nzc3NzdcIlxuYGBgIn0= -->
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># bright color blind palette:  https://personal.sron.nl/~pault/ </span>
 cblack &lt;-<span class="st"> &quot;#000004FF&quot;</span>
 cblue &lt;-<span class="st"> &quot;#3366AA&quot;</span>
 cteal &lt;-<span class="st"> &quot;#11AA99&quot;</span>
